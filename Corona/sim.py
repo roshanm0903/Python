@@ -24,11 +24,11 @@ class Person(pygame.sprite.Sprite):
         self.surf = pygame.Surface((3,3))
         self.surf.fill((0,0,0))
         self.infected = False
-        self.velocity = random.randint(1,2)
+        self.velocity = random.randint(0,3)
         self.theta = random.random()*math.pi*2
         self.immunity = random.randint(1,30)
         self.viremia = 0
-        self.shed = 1  # need to model this - > how much would be transferred to others? percentage of viremias
+        self.shed = 0  # need to model this - > how much would be transferred to others? percentage of viremias
         self.rect = self.surf.get_rect(
             center = (
                 random.randint(20,WINDOW_WIDTH),
@@ -56,32 +56,45 @@ class Person(pygame.sprite.Sprite):
         if self.rect.bottom >= WINDOW_HEIGHT +20 :
             self.rect.bottom = WINDOW_HEIGHT +20
             self.theta = math.pi*3/4
+
         #viremia update
-
+        self.shed = 0.1*self.viremia
         #infection update / color
-        if self.viremia > 10:
-            self.infected = True
-        else:
-            self.infected = False
-            infected_sprites.remove(self)
+        self.checkinfected()
+        self.immunesystem()
 
-        if self.infected:
-            if self.viremia>100:
-                self.viremia =100
-            elif self.viremia<0:
-                self.viremia = 0
-            self.surf.fill((255,255 - self.viremia*255/100,255 - self.viremia*255/100))
-            self.shed = 0.1*self.viremia
-            # pass
+    def immunesystem(self):
+
+        if self.viremia > 20*self.immunity:    #hospitalized because of severe symptoms
+            # self.velocity = 0
+            pass
+        elif self.viremia>self.immunity:
+            self.viremia *= 1.1    #(1-1/10*(self.viremia - self.immunity))
+        else:
+            self.viremia *= 0.99
+
     
     def checkinfected(self):
         if self.viremia > self.immunity:
             self.infected =True
+            if self.viremia>1000:
+                self.viremia =1000
+            elif self.viremia<0:
+                self.viremia = 0
+            
+            self.surf.fill((255,round(255 - self.viremia*255/1000),0))
+            # self.surf.fill((255,0,0))
+            infected_sprites.add(self)
+            pop_sprites.remove(self)
+                        
         else:
             self.infected = False 
             self.surf.fill((0,0,0))
+            pop_sprites.add(self)
+            infected_sprites.remove(self)
 
-pop =[]
+
+
 
 def population_gen(num,percentage):
     global pop 
@@ -89,22 +102,24 @@ def population_gen(num,percentage):
     for i in range(num):
         pop[i]=Person()
         if i <= percentage*num/100:
-            pop[i].infected=True
-            pop[i].viremia = random.randint(1,100)
+            # pop[i].infected=True
+            pop[i].viremia = random.randint(1,1000)
             infected_sprites.add(pop[i])
+        else:
+            pop_sprites.add(pop[i])
 
-        pop_sprites.add(pop[i])
 
-
-def transfer(carrier,contacts):
-    for infec in pygame.sprite.spritecollide(carrier, contacts, False):
-        infec.infected = True
+def transfer(carrier):
+    for infec in pygame.sprite.spritecollide(carrier, pop_sprites, False):
         infec.viremia += carrier.shed
         infected_sprites.add(infec)
-        
+        pop_sprites.remove(infec)
 
-pop_sprites = pygame.sprite.Group()
-infected_sprites = pygame.sprite.Group()
+
+pop =[]
+
+pop_sprites = pygame.sprite.Group()    #pop that isnt infected
+infected_sprites = pygame.sprite.Group()  #pop that is infected
 population_gen(500,1)
 
 pygame.init()
@@ -124,24 +139,24 @@ while running:
             running = False
 
     pop_sprites.update()
+    infected_sprites.update()
+
     screen.fill((80,80,255))
     left_window = right_window = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
     left_window.fill((255,255,255))
     right_window.fill((255,255,255))
-    
+
     screen.blit(left_window, (20,20))
     screen.blit(right_window, (510,20))
     
     for per in infected_sprites:
-        transfer(per,pop_sprites) 
-        # print("additional person")
-        # for infec in pygame.sprite.spritecollide(per, pop_sprites, False):
-        #     infec.infected = True
-        #     #add infected to infected group
-        #     infected_sprites.add(infec)
+        transfer(per) 
 
     for entity in pop_sprites:
         screen.blit(entity.surf, entity.rect)   #transfer one surface to another
+    for entity in infected_sprites:
+        screen.blit(entity.surf, entity.rect)   #transfer one surface to another
+    
     pygame.display.flip()  #push to display
     clock.tick(60)
     
